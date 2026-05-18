@@ -57,20 +57,15 @@ body {
   filter: drop-shadow(0 18px 24px rgba(0,0,0,0.45)) drop-shadow(0 2px 4px rgba(0,0,0,0.35));
 }
 .card-back {
-  background:
-    repeating-linear-gradient(45deg, #2b3a8a 0 8px, #1a236b 8px 16px),
-    #1a236b;
+  /* 黒×ゴールド・和風麻の葉のカード裏面。
+     画像は事前にカード境界でトリミング済み（738×1033）。 */
+  background-image: url("assets/card-back.png");
+  background-size: cover;
+  background-position: center;
+  background-color: #060604;  /* fallback while the PNG is still loading */
   transform: rotateY(180deg);
-  border: 6px solid #fff;
   border-radius: 14px;
   overflow: hidden;
-}
-.card-back::after {
-  content: "";
-  position: absolute;
-  inset: 8px;
-  border: 2px solid rgba(255,255,255,0.35);
-  border-radius: 8px;
 }
 
 /* card face content (filled by JS) */
