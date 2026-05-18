@@ -310,8 +310,13 @@
     }
   }
 
-  // ====== Swipe handling ======
+  // ====== Swipe handling (finger-tracking drag) ======
+  // The card follows the finger in real time. Releasing snaps it back (if the
+  // gesture was too short) or flicks it off-screen and brings in the next card
+  // from the opposite side (if it crossed the commit threshold).
   let touchStart = null;
+  let isDragging = false;
+  const COMMIT_DISTANCE = 80;  // px: drag past this to commit (flick out + new card)
 
   function onPointerDown(clientX, clientY) {
     if (isAnimating) return;
@@ -319,10 +324,30 @@
       ? detectHotspot(clientX, clientY)
       : null;
     touchStart = { x: clientX, y: clientY, hotspot, time: Date.now() };
+    isDragging = true;
+    // Stop any leftover slide animations and clear inline transforms cleanly.
+    clearSlideClasses();
+    $wrap.style.transition = 'none';
+    $wrap.style.transform = '';
+  }
+
+  function onPointerMove(clientX, clientY) {
+    if (!isDragging || !touchStart || isAnimating) return;
+    const dx = clientX - touchStart.x;
+    const dy = clientY - touchStart.y;
+    // Light rotation tied to horizontal travel — feels card-like, not slab-like.
+    const rot = Math.max(-12, Math.min(12, dx / 28));
+    $wrap.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
   }
 
   function onPointerUp(clientX, clientY) {
-    if (!touchStart || isAnimating) { touchStart = null; return; }
+    if (!touchStart || isAnimating) {
+      isDragging = false;
+      touchStart = null;
+      $wrap.style.transition = '';
+      return;
+    }
+    isDragging = false;
     const dx = clientX - touchStart.x;
     const dy = clientY - touchStart.y;
     const distance = Math.hypot(dx, dy);
@@ -331,12 +356,11 @@
     touchStart = null;
 
     if (isTap) {
-      // Tap (no swipe). Only used by audience back-card reveal.
+      snapBack();
+      // Audience back-card reveal also triggers on a tap.
       if (currentState === States.AUDIENCE_SWIPING) {
         const item = audienceShuffleOrder[currentAudienceIndex];
-        if (item && item.type === 'back') {
-          finishReveal();
-        }
+        if (item && item.type === 'back') finishReveal();
       }
       return;
     }
@@ -348,18 +372,27 @@
       $dbgSwipe.textContent = `${direction} ${Math.round(distance)}px` + (hotspot ? ` @${hotspot}` : '') + (isLong ? ' (long)' : '');
     }
 
-    // Encode only on short, deliberate gestures starting inside a hotspot.
-    // Long swipes always shuffle — even if they happened to start on a pip.
+    // Encode: short, started inside a hotspot, in READY_TO_ENCODE.
+    // The card snaps back so the audience sees no change.
     if (hotspot && !isLong && currentState === States.READY_TO_ENCODE) {
       encodedCard = { rank: hotspot, suit: DIR_TO_SUIT[direction] };
       transitionTo(States.ENCODED);
       log('encoded ->', encodedCard);
       updateDebugHUD();
+      snapBack();
       if (DEBUG) replayAnim($wrap, 'encode-pulse');
       return;
     }
 
-    handleSwipe(direction);
+    // Below the commit threshold → cancel and snap back (gives the user
+    // a "decided not to swipe" out, just like dragging a card halfway).
+    if (distance < COMMIT_DISTANCE) {
+      snapBack();
+      return;
+    }
+
+    // Commit: continue the motion off-screen and load the next card.
+    flickOutAndIn(direction, { dx, dy });
   }
 
   function detectDirection(dx, dy) {
@@ -367,36 +400,74 @@
     return dy > 0 ? 'down' : 'up';
   }
 
-  function handleSwipe(direction) {
+  /** Smoothly return the card to the resting position. */
+  function snapBack() {
+    $wrap.style.transition = 'transform 0.22s cubic-bezier(.2,.7,.3,1.2)';
+    $wrap.style.transform = '';
+    setTimeout(() => { $wrap.style.transition = ''; }, 240);
+  }
+
+  /**
+   * Continue the drag's motion off-screen, update the card content while it's
+   * hidden, then animate the new card in from the opposite side. The starting
+   * dx/dy let us pick up from wherever the finger left off.
+   */
+  function flickOutAndIn(direction, { dx, dy }) {
+    isAnimating = true;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    let tx = dx, ty = dy, rot = Math.max(-12, Math.min(12, dx / 28));
+    // Target: well past the screen edge in the swipe direction.
+    if (direction === 'right') { tx =  w * 1.2; rot =  14; }
+    if (direction === 'left')  { tx = -w * 1.2; rot = -14; }
+    if (direction === 'up')    { ty = -h * 1.2; }
+    if (direction === 'down')  { ty =  h * 1.2; }
+    $wrap.style.transition = 'transform 0.22s ease-in';
+    $wrap.style.transform = `translate(${tx}px, ${ty}px) rotate(${rot}deg)`;
+
+    setTimeout(() => {
+      // Update DOM while the card is off-screen (no visible jump).
+      updateCardForState(direction);
+      // Reset transform instantly, then animate slide-in from the opposite side.
+      $wrap.style.transition = 'none';
+      $wrap.style.transform = '';
+      void $wrap.offsetWidth;
+      $wrap.style.transition = '';
+      const pair = SLIDE_PAIRS[direction] || SLIDE_PAIRS.right;
+      $wrap.classList.add(pair.in);
+      setTimeout(() => {
+        clearSlideClasses();
+        isAnimating = false;
+      }, 320);
+    }, 220);
+  }
+
+  function updateCardForState(direction) {
     switch (currentState) {
       case States.INITIAL_SHUFFLE:
-        animateSwap(() => {
-          currentCard = pickRandomCard({ exclude: previousAnyCard || currentCard });
-          previousAnyCard = currentCard;
-          renderCard(currentCard);
-        }, direction);
+        currentCard = pickRandomCard({ exclude: previousAnyCard || currentCard });
+        previousAnyCard = currentCard;
+        renderCard(currentCard);
         break;
       case States.BACK_SHUFFLE:
-        // Card stays back-side; the slide gives a tactile "shuffle" feel.
-        animateSwap(() => { /* no DOM change */ }, direction);
+        // No card change — still showing back face.
         break;
       case States.READY_TO_ENCODE:
-        animateSwap(() => {
-          currentCard = pickRandom10Card({ excludeSuit: currentCard ? currentCard.suit : null });
-          renderCard(currentCard);
-        }, direction);
+        currentCard = pickRandom10Card({ excludeSuit: currentCard ? currentCard.suit : null });
+        renderCard(currentCard);
         break;
       case States.ENCODED:
         startAudienceMode();
         transitionTo(States.AUDIENCE_SWIPING);
-        animateSwap(() => { renderAudienceCurrent(); }, direction);
+        renderAudienceCurrent();
         break;
       case States.AUDIENCE_SWIPING:
-        advanceAudienceCard(direction);
+        if (currentAudienceIndex < audienceShuffleOrder.length - 1) {
+          currentAudienceIndex++;
+          renderAudienceCurrent();
+        }
         break;
-      default:
-        // FINISHED: ignore swipes
-        break;
+      // FINISHED: no-op
     }
   }
 
@@ -545,13 +616,26 @@
       startLongPress(t.clientX, t.clientY);
     }, { passive: true });
 
+    document.addEventListener('touchmove', (e) => {
+      cancelLongPress();
+      const t = e.touches[0];
+      if (t) onPointerMove(t.clientX, t.clientY);
+    }, { passive: true });
+
     document.addEventListener('touchend', (e) => {
       cancelLongPress();
       const t = e.changedTouches[0];
       onPointerUp(t.clientX, t.clientY);
     }, { passive: true });
 
-    document.addEventListener('touchmove', () => { cancelLongPress(); }, { passive: true });
+    document.addEventListener('touchcancel', (e) => {
+      cancelLongPress();
+      // Treat cancel like a release without travel: snap back if a drag was in flight.
+      if (isDragging && touchStart) {
+        isDragging = false; touchStart = null;
+        snapBack();
+      }
+    }, { passive: true });
 
     // Mouse events (desktop testing)
     document.addEventListener('mousedown', (e) => {
@@ -560,12 +644,16 @@
       onPointerDown(e.clientX, e.clientY);
       startLongPress(e.clientX, e.clientY);
     });
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      cancelLongPress();
+      onPointerMove(e.clientX, e.clientY);
+    });
     document.addEventListener('mouseup', (e) => {
       if (e.target === $flipBtn) return;
       cancelLongPress();
       onPointerUp(e.clientX, e.clientY);
     });
-    document.addEventListener('mousemove', () => { cancelLongPress(); });
   }
 
   // ====== Debug ======
