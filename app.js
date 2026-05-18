@@ -11,8 +11,11 @@
 
   // ====== Config ======
   const DEBUG = new URLSearchParams(location.search).has('debug');
-  const HOTSPOT_RADIUS = 50;            // px (spec)
-  const SWIPE_MIN_DISTANCE = 50;        // px (spec): below this, treat as tap
+  // Hotspot radius is sized relative to the card's actual width so it tracks
+  // viewport changes. ~9% of card width keeps each hotspot tightly on its pip
+  // (no overlap with neighbours) while still being large enough for a fingertip.
+  const HOTSPOT_RADIUS_PCT = 0.09;
+  const SWIPE_MIN_DISTANCE = 50;        // px: below this, treat as tap
   const LONG_SWIPE_DISTANCE = 160;      // px: above this, ignore hotspot — always shuffle
 
   // ====== Globals ======
@@ -175,9 +178,14 @@
     };
   }
 
+  function hotspotRadiusPx() {
+    return cardRect().width * HOTSPOT_RADIUS_PCT;
+  }
+
   function detectHotspot(clientX, clientY) {
+    const radius = hotspotRadiusPx();
     let best = null;
-    let bestD2 = HOTSPOT_RADIUS * HOTSPOT_RADIUS;
+    let bestD2 = radius * radius;
     for (const h of HOTSPOTS) {
       const c = hotspotCenterPx(h);
       const dx = clientX - c.x, dy = clientY - c.y;
@@ -205,6 +213,14 @@
     $hotspots.style.top  = r.top  + 'px';
     $hotspots.style.width = r.width + 'px';
     $hotspots.style.height = r.height + 'px';
+    // size the overlay circles to match the actual hit-test radius
+    const d = Math.round(hotspotRadiusPx() * 2);
+    for (const el of $hotspots.querySelectorAll('.hot')) {
+      el.style.width  = d + 'px';
+      el.style.height = d + 'px';
+      el.style.marginLeft = (-d/2) + 'px';
+      el.style.marginTop  = (-d/2) + 'px';
+    }
   }
   window.addEventListener('resize', () => { if (DEBUG) positionHotspotLayer(); });
 
@@ -364,7 +380,9 @@
         break;
       case States.BACK_SHUFFLE:
         if (direction === 'right') {
-          replayAnim($wrap, 'back-shift');
+          // Same slide as front shuffles — the card just happens to be back-side.
+          // Gives the audience a tactile "shuffle" feel even while flipped.
+          animateSwap(() => { /* keep showing back; no DOM change needed */ });
         }
         break;
       case States.READY_TO_ENCODE:

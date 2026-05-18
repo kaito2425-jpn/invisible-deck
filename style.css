@@ -157,16 +157,13 @@ body {
 }
 body.debug #hotspot-layer { display: block; }
 .hot {
+  /* size is set dynamically by JS to match hotspotRadiusPx() */
   position: absolute;
-  width: 100px;
-  height: 100px;
-  margin-left: -50px;
-  margin-top: -50px;
   border-radius: 50%;
-  background: rgba(0, 200, 255, 0.18);
-  border: 1px dashed rgba(0, 200, 255, 0.6);
+  background: rgba(0, 200, 255, 0.22);
+  border: 1px dashed rgba(0, 200, 255, 0.7);
   color: #001;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   display: flex;
   align-items: center;
