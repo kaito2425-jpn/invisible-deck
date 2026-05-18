@@ -25,7 +25,9 @@
     1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7',
     8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K'
   };
-  const DIR_TO_SUIT = { up: 'diamond', right: 'heart', down: 'club', left: 'spade' };
+  // Direction → suit mapping (user spec, overrides v1.4 spec doc):
+  // up=♥ heart, right=♦ diamond, down=♣ club, left=♠ spade
+  const DIR_TO_SUIT = { up: 'heart', right: 'diamond', down: 'club', left: 'spade' };
 
   /** @typedef {{rank:number, suit:string}} Card */
 
