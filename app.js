@@ -311,12 +311,11 @@
   }
 
   // ====== Swipe handling (finger-tracking drag) ======
-  // The card follows the finger in real time. Releasing snaps it back (if the
-  // gesture was too short) or flicks it off-screen and brings in the next card
-  // from the opposite side (if it crossed the commit threshold).
+  // The card follows the finger in real time. Releasing either snaps it back
+  // (under SWIPE_MIN_DISTANCE → tap) or flicks it off-screen with a fresh card
+  // sliding in from the opposite side (any deliberate swipe).
   let touchStart = null;
   let isDragging = false;
-  const COMMIT_DISTANCE = 80;  // px: drag past this to commit (flick out + new card)
 
   function onPointerDown(clientX, clientY) {
     if (isAnimating) return;
@@ -384,14 +383,7 @@
       return;
     }
 
-    // Below the commit threshold → cancel and snap back (gives the user
-    // a "decided not to swipe" out, just like dragging a card halfway).
-    if (distance < COMMIT_DISTANCE) {
-      snapBack();
-      return;
-    }
-
-    // Commit: continue the motion off-screen and load the next card.
+    // Any deliberate swipe past the tap threshold commits to a card change.
     flickOutAndIn(direction, { dx, dy });
   }
 
