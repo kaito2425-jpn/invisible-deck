@@ -11,12 +11,11 @@
 
   // ====== Config ======
   const DEBUG = new URLSearchParams(location.search).has('debug');
-  // Hotspot radius is sized relative to the card's actual width so it tracks
-  // viewport changes. ~9% of card width keeps each hotspot tightly on its pip
-  // (no overlap with neighbours) while still being large enough for a fingertip.
-  const HOTSPOT_RADIUS_PCT = 0.09;
-  const SWIPE_MIN_DISTANCE = 50;        // px: below this, treat as tap
-  const LONG_SWIPE_DISTANCE = 160;      // px: above this, ignore hotspot — always shuffle
+  // Hotspot radius scales with card width so it tracks viewport changes.
+  // 11% (~35px on a 322px-wide card) is just under half the inter-pip distance
+  // — neighbours don't overlap, but a fingertip fits comfortably.
+  const HOTSPOT_RADIUS_PCT = 0.11;
+  const SWIPE_MIN_DISTANCE = 50;        // px: below this, treat as tap (snap back)
 
   // ====== Globals ======
   const SUITS = ['spade', 'heart', 'club', 'diamond'];
@@ -365,15 +364,15 @@
     }
 
     const direction = detectDirection(dx, dy);
-    const isLong = distance >= LONG_SWIPE_DISTANCE;
-    log('swipe', direction, 'hotspot=', hotspot, 'dist=', Math.round(distance), isLong ? '(long)' : '');
+    log('swipe', direction, 'hotspot=', hotspot, 'dist=', Math.round(distance));
     if (DEBUG) {
-      $dbgSwipe.textContent = `${direction} ${Math.round(distance)}px` + (hotspot ? ` @${hotspot}` : '') + (isLong ? ' (long)' : '');
+      $dbgSwipe.textContent = `${direction} ${Math.round(distance)}px` + (hotspot ? ` @${hotspot}` : '');
     }
 
-    // Encode: short, started inside a hotspot, in READY_TO_ENCODE.
-    // The card snaps back so the audience sees no change.
-    if (hotspot && !isLong && currentState === States.READY_TO_ENCODE) {
+    // Encode: any swipe that started inside a hotspot while in READY_TO_ENCODE.
+    // (Spec says "press+direction swipe → ENCODED" — distance is not the limit;
+    // direction picks the suit.) Snap back so audience sees no change.
+    if (hotspot && currentState === States.READY_TO_ENCODE) {
       encodedCard = { rank: hotspot, suit: DIR_TO_SUIT[direction] };
       transitionTo(States.ENCODED);
       log('encoded ->', encodedCard);
