@@ -11,8 +11,9 @@
 
   // ====== Config ======
   const DEBUG = new URLSearchParams(location.search).has('debug');
-  const HOTSPOT_RADIUS = 50;        // px (spec)
-  const SWIPE_MIN_DISTANCE = 50;    // px (spec)
+  const HOTSPOT_RADIUS = 50;            // px (spec)
+  const SWIPE_MIN_DISTANCE = 50;        // px (spec): below this, treat as tap
+  const LONG_SWIPE_DISTANCE = 160;      // px: above this, ignore hotspot — always shuffle
 
   // ====== Globals ======
   const SUITS = ['spade', 'heart', 'club', 'diamond'];
@@ -53,6 +54,7 @@
   let sheetLoaded = false;
 
   // ====== DOM ======
+  const $wrap = document.getElementById('card-wrapper');
   const $card = document.getElementById('card');
   const $front = document.getElementById('card-front');
   const $back = document.getElementById('card-back');
@@ -324,15 +326,20 @@
     }
 
     const direction = detectDirection(dx, dy);
-    log('swipe', direction, 'hotspot=', hotspot);
-    if (DEBUG) $dbgSwipe.textContent = `${direction}` + (hotspot ? ` @${hotspot}` : '');
+    const isLong = distance >= LONG_SWIPE_DISTANCE;
+    log('swipe', direction, 'hotspot=', hotspot, 'dist=', Math.round(distance), isLong ? '(long)' : '');
+    if (DEBUG) {
+      $dbgSwipe.textContent = `${direction} ${Math.round(distance)}px` + (hotspot ? ` @${hotspot}` : '') + (isLong ? ' (long)' : '');
+    }
 
-    // Encode while in READY_TO_ENCODE
-    if (hotspot && currentState === States.READY_TO_ENCODE) {
+    // Encode only on short, deliberate gestures starting inside a hotspot.
+    // Long swipes always shuffle — even if they happened to start on a pip.
+    if (hotspot && !isLong && currentState === States.READY_TO_ENCODE) {
       encodedCard = { rank: hotspot, suit: DIR_TO_SUIT[direction] };
       transitionTo(States.ENCODED);
       log('encoded ->', encodedCard);
       updateDebugHUD();
+      if (DEBUG) replayAnim($wrap, 'encode-pulse');
       return;
     }
 
@@ -348,30 +355,31 @@
     switch (currentState) {
       case States.INITIAL_SHUFFLE:
         if (direction === 'right') {
-          currentCard = pickRandomCard({ exclude: previousAnyCard || currentCard });
-          previousAnyCard = currentCard;
-          renderCard(currentCard);
-          replayAnim($card, 'slide-in');
+          animateSwap(() => {
+            currentCard = pickRandomCard({ exclude: previousAnyCard || currentCard });
+            previousAnyCard = currentCard;
+            renderCard(currentCard);
+          });
         }
         break;
       case States.BACK_SHUFFLE:
         if (direction === 'right') {
-          replayAnim($card, 'back-shift');
+          replayAnim($wrap, 'back-shift');
         }
         break;
       case States.READY_TO_ENCODE:
         if (direction === 'right') {
-          currentCard = pickRandom10Card({ excludeSuit: currentCard ? currentCard.suit : null });
-          renderCard(currentCard);
-          replayAnim($card, 'slide-in');
+          animateSwap(() => {
+            currentCard = pickRandom10Card({ excludeSuit: currentCard ? currentCard.suit : null });
+            renderCard(currentCard);
+          });
         }
         break;
       case States.ENCODED:
         if (direction === 'right') {
           startAudienceMode();
           transitionTo(States.AUDIENCE_SWIPING);
-          renderAudienceCurrent();
-          replayAnim($card, 'slide-in');
+          animateSwap(() => { renderAudienceCurrent(); });
         }
         break;
       case States.AUDIENCE_SWIPING:
@@ -408,8 +416,7 @@
   function advanceAudienceCard() {
     if (currentAudienceIndex < audienceShuffleOrder.length - 1) {
       currentAudienceIndex++;
-      renderAudienceCurrent();
-      replayAnim($card, 'slide-in');
+      animateSwap(() => { renderAudienceCurrent(); });
     }
   }
 
@@ -447,6 +454,31 @@
     el.classList.remove(klass);
     void el.offsetWidth; // reflow to restart animation
     el.classList.add(klass);
+  }
+
+  /**
+   * Two-phase card swap: current card slides off to the right, then the next
+   * card slides in from the left. updateFn runs between the two phases — that's
+   * when the DOM should be mutated (renderCard, showBackOnly, etc).
+   */
+  function animateSwap(updateFn) {
+    isAnimating = true;
+    // Cancel any in-flight slide-in (e.g. rapid swipes).
+    $wrap.classList.remove('slide-in', 'slide-out');
+    void $wrap.offsetWidth;
+    $wrap.classList.add('slide-out');
+    const SLIDE_OUT_MS = 220;
+    const SLIDE_IN_MS = 320;
+    setTimeout(() => {
+      try { updateFn(); } catch (e) { console.error('[ID] animateSwap update failed', e); }
+      $wrap.classList.remove('slide-out');
+      void $wrap.offsetWidth;
+      $wrap.classList.add('slide-in');
+      setTimeout(() => {
+        $wrap.classList.remove('slide-in');
+        isAnimating = false;
+      }, SLIDE_IN_MS);
+    }, SLIDE_OUT_MS);
   }
 
   // ====== Phase 1 fallback: button flip ======

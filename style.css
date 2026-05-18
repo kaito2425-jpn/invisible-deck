@@ -21,16 +21,23 @@ body {
 }
 
 /* === Card === */
-.card {
+/* The wrapper owns slide transforms; the inner .card owns 3D flip transforms.
+   This keeps slide-out / slide-in animations from clashing with the rotateY flip. */
+#card-wrapper {
   position: relative;
   width: min(86vw, 360px);
-  /* aspect matches the SVG sheet card box (359 x 539) */
   aspect-ratio: 359 / 539;
+  perspective: 1200px;
+  font-size: clamp(10px, 4.5vw, 18px);
+  will-change: transform;
+}
+.card {
+  position: relative;
+  width: 100%;
+  height: 100%;
   transform-style: preserve-3d;
   transition: transform 0.3s ease-out;
   will-change: transform;
-  /* base font size scales with card width so % positions stay in proportion */
-  font-size: clamp(10px, 4.5vw, 18px);
 }
 .card.sliding {
   transition: transform 0.3s ease-out;
@@ -41,9 +48,11 @@ body {
   border-radius: 14px;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  box-shadow: 0 18px 40px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4);
-  overflow: hidden;
-  background: #fff;
+  /* SVG already paints its own rounded white background, so keep the face transparent
+     to avoid a stray white square poking out behind the SVG's corners. */
+  background: transparent;
+  /* Filter-based shadow follows the alpha of the SVG (not the square box). */
+  filter: drop-shadow(0 18px 24px rgba(0,0,0,0.45)) drop-shadow(0 2px 4px rgba(0,0,0,0.35));
 }
 .card-back {
   background:
@@ -51,6 +60,8 @@ body {
     #1a236b;
   transform: rotateY(180deg);
   border: 6px solid #fff;
+  border-radius: 14px;
+  overflow: hidden;
 }
 .card-back::after {
   content: "";
@@ -197,17 +208,25 @@ body.debug #hotspot-layer { display: block; }
 body:not(.debug) #tap-flip { display: none; }
 
 /* === Animations === */
-@keyframes slideInRight {
-  0%   { transform: translateX(-30%); opacity: 0; }
-  100% { transform: translateX(0);    opacity: 1; }
+/* Slide animations live on the wrapper to avoid clashing with the inner 3D flip. */
+@keyframes slideOutRight {
+  0%   { transform: translateX(0)     rotate(0deg);   opacity: 1; }
+  100% { transform: translateX(135%)  rotate(8deg);   opacity: 0; }
+}
+@keyframes slideInLeft {
+  0%   { transform: translateX(-135%) rotate(-8deg);  opacity: 0; }
+  60%  { transform: translateX(4%)    rotate(1.5deg); opacity: 1; }
+  100% { transform: translateX(0)     rotate(0deg);   opacity: 1; }
 }
 @keyframes backShift {
   0%   { transform: translateX(0); }
-  50%  { transform: translateX(10px); }
+  50%  { transform: translateX(14px); }
   100% { transform: translateX(0); }
 }
-.card.slide-in { animation: slideInRight 0.3s ease-out; }
-.card.back-shift { animation: backShift 0.2s ease-out; }
+
+#card-wrapper.slide-out { animation: slideOutRight 0.22s ease-in forwards; }
+#card-wrapper.slide-in  { animation: slideInLeft   0.32s cubic-bezier(.2,.7,.3,1.2); }
+#card-wrapper.back-shift { animation: backShift 0.22s ease-out; }
 
 @keyframes cardFlip {
   0%   { transform: rotateY(0deg); }
@@ -220,3 +239,12 @@ body:not(.debug) #tap-flip { display: none; }
 }
 .card.finish-flip { animation: cardFlip 1.5s ease-in-out forwards; }
 .card.finish-zoom { animation: revealZoom 0.5s ease-in-out 1.5s; }
+
+/* Subtle hotspot-encode feedback — only visible when developer is debugging
+   (so the audience never notices in production). */
+@keyframes hotspotPulse {
+  0%   { transform: scale(1.0); }
+  40%  { transform: scale(1.025); }
+  100% { transform: scale(1.0); }
+}
+body.debug #card-wrapper.encode-pulse { animation: hotspotPulse 0.25s ease-out; }
