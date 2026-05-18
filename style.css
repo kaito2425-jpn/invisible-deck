@@ -36,7 +36,9 @@ body {
   width: 100%;
   height: 100%;
   transform-style: preserve-3d;
-  transition: transform 0.3s ease-out;
+  /* 0.5s flip — matches DeviceOrientation debounce so the visual finishes
+     about the same time the user finishes turning the phone. */
+  transition: transform 0.5s ease-in-out;
   will-change: transform;
 }
 .card.sliding {

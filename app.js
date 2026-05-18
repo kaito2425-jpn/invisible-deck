@@ -68,6 +68,7 @@
   const $dbgEncoded = document.getElementById('dbg-encoded');
   const $dbgIdx = document.getElementById('dbg-idx');
   const $dbgSwipe = document.getElementById('dbg-swipe');
+  const $dbgFlip = document.getElementById('dbg-flip');
   const $flipBtn = document.getElementById('tap-flip');
 
   // NOTE: DEBUG-mode UI init is deferred to boot(), after HOTSPOTS is defined.
@@ -311,6 +312,73 @@
     }
   }
 
+  // ====== DeviceOrientation (physical phone flip) ======
+  // β (beta) is the front-back tilt: ~0° = phone lying flat face-up,
+  // ~±180° = flat face-down. We require the new state to persist 0.5s before
+  // committing so a quick tilt doesn't trigger a false flip.
+  let flipState = 'front';          // 'front' | 'back'
+  let flipPendingState = null;
+  let flipPendingTimer = null;
+  let lastBeta = null;              // last seen beta (for debug)
+  let orientationInitialized = false;
+  let orientationEnabled = false;
+
+  let hudThrottle = 0;
+  function handleOrientation(e) {
+    const beta = e.beta;
+    lastBeta = beta;
+    if (beta == null) return;
+    // Throttle HUD repaints to ~10/s so we're not thrashing layout on every event.
+    const now = performance.now();
+    if (now - hudThrottle > 100) {
+      hudThrottle = now;
+      updateDebugHUD();
+    }
+    let newState = null;
+    if (Math.abs(beta) > 160) newState = 'back';
+    else if (Math.abs(beta) < 20) newState = 'front';
+
+    if (newState && newState !== flipState && newState !== flipPendingState) {
+      flipPendingState = newState;
+      clearTimeout(flipPendingTimer);
+      flipPendingTimer = setTimeout(() => {
+        flipState = flipPendingState;
+        flipPendingState = null;
+        log('flip confirmed ->', flipState, 'beta=', beta);
+        if (flipState === 'back') onFlipToBack();
+        else onFlipToFront();
+        updateDebugHUD();
+      }, 500);
+    } else if (newState !== flipPendingState && flipPendingTimer) {
+      // The user moved out of the trigger zone before 0.5s — cancel.
+      clearTimeout(flipPendingTimer);
+      flipPendingTimer = null;
+      flipPendingState = null;
+    }
+  }
+
+  async function initOrientation() {
+    if (orientationInitialized) return;
+    orientationInitialized = true;
+    try {
+      // iOS Safari 13+ requires explicit permission inside a user gesture.
+      if (typeof DeviceOrientationEvent !== 'undefined'
+          && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const perm = await DeviceOrientationEvent.requestPermission();
+        if (perm !== 'granted') {
+          log('DeviceOrientation permission denied — long-press fallback only');
+          return;
+        }
+      }
+      window.addEventListener('deviceorientation', handleOrientation);
+      orientationEnabled = true;
+      log('DeviceOrientation enabled');
+      updateDebugHUD();
+    } catch (err) {
+      log('DeviceOrientation init failed', err);
+    }
+  }
+
   // ====== Swipe handling (finger-tracking drag) ======
   // The card follows the finger in real time. Releasing either snaps it back
   // (under SWIPE_MIN_DISTANCE → tap) or flicks it off-screen with a fresh card
@@ -319,6 +387,8 @@
   let isDragging = false;
 
   function onPointerDown(clientX, clientY) {
+    // First user gesture is also the trigger for iOS DeviceOrientation permission.
+    if (!orientationInitialized) { initOrientation(); }
     if (isAnimating) return;
     const hotspot = (currentState === States.READY_TO_ENCODE || currentState === States.ENCODED)
       ? detectHotspot(clientX, clientY)
@@ -675,6 +745,12 @@
     $dbgIdx.textContent = audienceShuffleOrder
       ? `${currentAudienceIndex + 1}/${audienceShuffleOrder.length} (back@${backCardPosition})`
       : '-';
+    if ($dbgFlip) {
+      const enabled = orientationEnabled ? 'on' : (orientationInitialized ? 'denied' : 'pending');
+      const beta = lastBeta == null ? '-' : Math.round(lastBeta) + '°';
+      const pending = flipPendingState ? `→${flipPendingState}` : '';
+      $dbgFlip.textContent = `${flipState} β=${beta} (${enabled})${pending}`;
+    }
   }
 
   // ====== Boot ======
