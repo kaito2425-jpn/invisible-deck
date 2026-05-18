@@ -333,11 +333,21 @@
 
   function onPointerMove(clientX, clientY) {
     if (!isDragging || !touchStart || isAnimating) return;
+    // When the X-card is showing (audience back card), lock the card in place
+    // so it can ONLY be tapped to reveal — no accidental swipe past it.
+    if (isBackCardShowing()) return;
     const dx = clientX - touchStart.x;
     const dy = clientY - touchStart.y;
     // Light rotation tied to horizontal travel — feels card-like, not slab-like.
     const rot = Math.max(-12, Math.min(12, dx / 28));
     $wrap.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+  }
+
+  function isBackCardShowing() {
+    if (currentState !== States.AUDIENCE_SWIPING) return false;
+    if (!audienceShuffleOrder) return false;
+    const item = audienceShuffleOrder[currentAudienceIndex];
+    return !!(item && item.type === 'back');
   }
 
   function onPointerUp(clientX, clientY) {
@@ -358,10 +368,15 @@
     if (isTap) {
       snapBack();
       // Audience back-card reveal also triggers on a tap.
-      if (currentState === States.AUDIENCE_SWIPING) {
-        const item = audienceShuffleOrder[currentAudienceIndex];
-        if (item && item.type === 'back') finishReveal();
-      }
+      if (isBackCardShowing()) finishReveal();
+      return;
+    }
+
+    // When the X-card (back) is showing, swipes do nothing — only a tap reveals.
+    // Snap the card back to its resting position so the user knows their swipe
+    // was acknowledged but didn't consume the card.
+    if (isBackCardShowing()) {
+      snapBack();
       return;
     }
 
