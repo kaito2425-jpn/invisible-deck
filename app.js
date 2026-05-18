@@ -370,40 +370,29 @@
   function handleSwipe(direction) {
     switch (currentState) {
       case States.INITIAL_SHUFFLE:
-        if (direction === 'right') {
-          animateSwap(() => {
-            currentCard = pickRandomCard({ exclude: previousAnyCard || currentCard });
-            previousAnyCard = currentCard;
-            renderCard(currentCard);
-          });
-        }
+        animateSwap(() => {
+          currentCard = pickRandomCard({ exclude: previousAnyCard || currentCard });
+          previousAnyCard = currentCard;
+          renderCard(currentCard);
+        }, direction);
         break;
       case States.BACK_SHUFFLE:
-        if (direction === 'right') {
-          // Same slide as front shuffles — the card just happens to be back-side.
-          // Gives the audience a tactile "shuffle" feel even while flipped.
-          animateSwap(() => { /* keep showing back; no DOM change needed */ });
-        }
+        // Card stays back-side; the slide gives a tactile "shuffle" feel.
+        animateSwap(() => { /* no DOM change */ }, direction);
         break;
       case States.READY_TO_ENCODE:
-        if (direction === 'right') {
-          animateSwap(() => {
-            currentCard = pickRandom10Card({ excludeSuit: currentCard ? currentCard.suit : null });
-            renderCard(currentCard);
-          });
-        }
+        animateSwap(() => {
+          currentCard = pickRandom10Card({ excludeSuit: currentCard ? currentCard.suit : null });
+          renderCard(currentCard);
+        }, direction);
         break;
       case States.ENCODED:
-        if (direction === 'right') {
-          startAudienceMode();
-          transitionTo(States.AUDIENCE_SWIPING);
-          animateSwap(() => { renderAudienceCurrent(); });
-        }
+        startAudienceMode();
+        transitionTo(States.AUDIENCE_SWIPING);
+        animateSwap(() => { renderAudienceCurrent(); }, direction);
         break;
       case States.AUDIENCE_SWIPING:
-        if (direction === 'right') {
-          advanceAudienceCard();
-        }
+        advanceAudienceCard(direction);
         break;
       default:
         // FINISHED: ignore swipes
@@ -431,10 +420,10 @@
     updateDebugHUD();
   }
 
-  function advanceAudienceCard() {
+  function advanceAudienceCard(direction = 'right') {
     if (currentAudienceIndex < audienceShuffleOrder.length - 1) {
       currentAudienceIndex++;
-      animateSwap(() => { renderAudienceCurrent(); });
+      animateSwap(() => { renderAudienceCurrent(); }, direction);
     }
   }
 
@@ -475,25 +464,39 @@
   }
 
   /**
-   * Two-phase card swap: current card slides off to the right, then the next
-   * card slides in from the left. updateFn runs between the two phases — that's
-   * when the DOM should be mutated (renderCard, showBackOnly, etc).
+   * Two-phase directional card swap: current card slides off in `direction`,
+   * then the replacement enters from the opposite side. updateFn runs between
+   * the two phases — that's when the DOM should mutate (renderCard, etc).
+   *
+   * direction: 'right' (default) | 'left' | 'up' | 'down'
    */
-  function animateSwap(updateFn) {
+  const SLIDE_PAIRS = {
+    right: { out: 'slide-out-right', in: 'slide-in-from-left' },
+    left:  { out: 'slide-out-left',  in: 'slide-in-from-right' },
+    up:    { out: 'slide-out-up',    in: 'slide-in-from-bottom' },
+    down:  { out: 'slide-out-down',  in: 'slide-in-from-top' },
+  };
+  function clearSlideClasses() {
+    $wrap.classList.remove(
+      'slide-out-right', 'slide-out-left', 'slide-out-up', 'slide-out-down',
+      'slide-in-from-left', 'slide-in-from-right', 'slide-in-from-top', 'slide-in-from-bottom'
+    );
+  }
+  function animateSwap(updateFn, direction = 'right') {
     isAnimating = true;
-    // Cancel any in-flight slide-in (e.g. rapid swipes).
-    $wrap.classList.remove('slide-in', 'slide-out');
+    const pair = SLIDE_PAIRS[direction] || SLIDE_PAIRS.right;
+    clearSlideClasses();
     void $wrap.offsetWidth;
-    $wrap.classList.add('slide-out');
+    $wrap.classList.add(pair.out);
     const SLIDE_OUT_MS = 220;
     const SLIDE_IN_MS = 320;
     setTimeout(() => {
       try { updateFn(); } catch (e) { console.error('[ID] animateSwap update failed', e); }
-      $wrap.classList.remove('slide-out');
+      clearSlideClasses();
       void $wrap.offsetWidth;
-      $wrap.classList.add('slide-in');
+      $wrap.classList.add(pair.in);
       setTimeout(() => {
-        $wrap.classList.remove('slide-in');
+        clearSlideClasses();
         isAnimating = false;
       }, SLIDE_IN_MS);
     }, SLIDE_OUT_MS);

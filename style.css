@@ -205,25 +205,54 @@ body.debug #hotspot-layer { display: block; }
 body:not(.debug) #tap-flip { display: none; }
 
 /* === Animations === */
-/* Slide animations live on the wrapper to avoid clashing with the inner 3D flip. */
+/* Slide animations live on the wrapper to avoid clashing with the inner 3D flip.
+   Each direction has a matched out/in pair: a card exiting "right" is replaced
+   by a card entering "from-left", so motion looks continuous along one axis. */
 @keyframes slideOutRight {
   0%   { transform: translateX(0)     rotate(0deg);   opacity: 1; }
   100% { transform: translateX(135%)  rotate(8deg);   opacity: 0; }
 }
-@keyframes slideInLeft {
+@keyframes slideOutLeft {
+  0%   { transform: translateX(0)     rotate(0deg);   opacity: 1; }
+  100% { transform: translateX(-135%) rotate(-8deg);  opacity: 0; }
+}
+@keyframes slideOutUp {
+  0%   { transform: translateY(0)     rotate(0deg);   opacity: 1; }
+  100% { transform: translateY(-135%) rotate(4deg);   opacity: 0; }
+}
+@keyframes slideOutDown {
+  0%   { transform: translateY(0)     rotate(0deg);   opacity: 1; }
+  100% { transform: translateY(135%)  rotate(-4deg);  opacity: 0; }
+}
+@keyframes slideInFromLeft {
   0%   { transform: translateX(-135%) rotate(-8deg);  opacity: 0; }
   60%  { transform: translateX(4%)    rotate(1.5deg); opacity: 1; }
   100% { transform: translateX(0)     rotate(0deg);   opacity: 1; }
 }
-@keyframes backShift {
-  0%   { transform: translateX(0); }
-  50%  { transform: translateX(14px); }
-  100% { transform: translateX(0); }
+@keyframes slideInFromRight {
+  0%   { transform: translateX(135%)  rotate(8deg);   opacity: 0; }
+  60%  { transform: translateX(-4%)   rotate(-1.5deg);opacity: 1; }
+  100% { transform: translateX(0)     rotate(0deg);   opacity: 1; }
+}
+@keyframes slideInFromTop {
+  0%   { transform: translateY(-135%) rotate(4deg);   opacity: 0; }
+  60%  { transform: translateY(4%)    rotate(-1.5deg);opacity: 1; }
+  100% { transform: translateY(0)     rotate(0deg);   opacity: 1; }
+}
+@keyframes slideInFromBottom {
+  0%   { transform: translateY(135%)  rotate(-4deg);  opacity: 0; }
+  60%  { transform: translateY(-4%)   rotate(1.5deg); opacity: 1; }
+  100% { transform: translateY(0)     rotate(0deg);   opacity: 1; }
 }
 
-#card-wrapper.slide-out { animation: slideOutRight 0.22s ease-in forwards; }
-#card-wrapper.slide-in  { animation: slideInLeft   0.32s cubic-bezier(.2,.7,.3,1.2); }
-#card-wrapper.back-shift { animation: backShift 0.22s ease-out; }
+#card-wrapper.slide-out-right { animation: slideOutRight 0.22s ease-in forwards; }
+#card-wrapper.slide-out-left  { animation: slideOutLeft  0.22s ease-in forwards; }
+#card-wrapper.slide-out-up    { animation: slideOutUp    0.22s ease-in forwards; }
+#card-wrapper.slide-out-down  { animation: slideOutDown  0.22s ease-in forwards; }
+#card-wrapper.slide-in-from-left   { animation: slideInFromLeft   0.32s cubic-bezier(.2,.7,.3,1.2); }
+#card-wrapper.slide-in-from-right  { animation: slideInFromRight  0.32s cubic-bezier(.2,.7,.3,1.2); }
+#card-wrapper.slide-in-from-top    { animation: slideInFromTop    0.32s cubic-bezier(.2,.7,.3,1.2); }
+#card-wrapper.slide-in-from-bottom { animation: slideInFromBottom 0.32s cubic-bezier(.2,.7,.3,1.2); }
 
 @keyframes cardFlip {
   0%   { transform: rotateY(0deg); }
