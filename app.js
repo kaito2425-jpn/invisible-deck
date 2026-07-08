@@ -1,8 +1,10 @@
-/* Invisible Deck App - Phase 2
+/* Invisible Deck App - Phase 3
  * - SVG sprite (assets/cards-sheet.svg, 52 cards in 13x4 grid) loaded once into memory
  * - 13 hotspots over the standard 4-2-4 ten-card layout
  * - Slide / flip / zoom animations + history-aware random picks
- * - DeviceOrientation still deferred (button + long-press fallback)
+ * - DeviceOrientation physical flip (|beta|>160 back / <20 front, 0.5s debounce);
+ *   iOS permission is requested on the first touch. Long-press (700ms) fallback
+ *   and debug-only FLIP button remain.
  * - ?debug=1 enables debug overlay + state HUD + console logs
  */
 

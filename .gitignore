@@ -1,5 +1,6 @@
 .DS_Store
 ._*
+カード裏面生成データ/
 node_modules/
 .env
 .env.local
